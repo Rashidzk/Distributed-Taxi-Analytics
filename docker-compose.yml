@@ -16,6 +16,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+  postgres:
+    image: postgres:15
+    container_name: airflow-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_db:/var/lib/postgresql/data
 
   spark-master:
     image: apache/spark:3.5.1-python3
@@ -50,66 +61,79 @@ services:
     volumes:
       - ./spark/jobs:/opt/spark/jobs
       - ./data:/opt/spark/data
+  
   airflow-init:
     image: apache/airflow:2.9.3
     container_name: airflow-init
+    user: "0:0"
     depends_on:
       - clickhouse
     environment:
-      AIRFLOW_HOME: /opt/airflow
-      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: "300"
+
     volumes:
       - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/logs:/opt/airflow/logs
+      - airflow_logs:/opt/airflow/logs #
       - ./scripts:/opt/airflow/scripts
       - ./data:/opt/airflow/data
+      - airflow_home:/opt/airflow
     command: >
       bash -c "
+      mkdir -p /opt/airflow/logs /opt/airflow/dags /opt/airflow/plugins &&
       airflow db migrate &&
-      airflow users create
-      --username admin
-      --password admin
-      --firstname Admin
-      --lastname User
-      --role Admin
-      --email admin@example.com
+      airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true
       "
 
   airflow-webserver:
     image: apache/airflow:2.9.3
     container_name: airflow-webserver
+    user: "0:0"
     depends_on:
+      - postgres
       - airflow-init
     environment:
-      AIRFLOW_HOME: /opt/airflow
-      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: "300"
+
     ports:
       - "8081:8080"
     volumes:
       - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/logs:/opt/airflow/logs
+      - airflow_logs:/opt/airflow/logs #
       - ./scripts:/opt/airflow/scripts
       - ./spark/jobs:/opt/airflow/spark/jobs
       - ./data:/opt/airflow/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - airflow_home:/opt/airflow
     command: webserver
 
   airflow-scheduler:
     image: apache/airflow:2.9.3
     container_name: airflow-scheduler
+    user: "0:0"
     depends_on:
       - airflow-webserver
     environment:
-      AIRFLOW_HOME: /opt/airflow
-      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: "300"
+
     volumes:
       - ./airflow/dags:/opt/airflow/dags
-      - ./airflow/logs:/opt/airflow/logs
+      - airflow_logs:/opt/airflow/logs #
       - ./scripts:/opt/airflow/scripts
       - ./spark/jobs:/opt/airflow/spark/jobs
       - ./data:/opt/airflow/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - airflow_home:/opt/airflow
     command: scheduler
+volumes:
+  airflow_logs:
+  airflow_home:
+  postgres_db:
