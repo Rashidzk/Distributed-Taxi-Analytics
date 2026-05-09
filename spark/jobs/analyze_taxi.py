@@ -6,7 +6,8 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 input_path = "/opt/spark/data/raw/yellow_tripdata_2024-01.parquet"
-output_path = "/opt/spark/data/processed/trips_by_hour"
+parquet_output_path = "/opt/spark/data/processed/trips_by_hour"
+csv_output_path = "/opt/spark/data/processed/trips_by_hour_csv"
 
 df = spark.read.parquet(input_path)
 
@@ -19,9 +20,10 @@ result = df.withColumn("trip_date", to_date(col("tpep_pickup_datetime"))) \
         avg("trip_distance").alias("avg_distance")
     ) \
     .orderBy("trip_date", "pickup_hour")
-
-result.write.mode("overwrite").parquet(output_path)
-
-result.show(20, truncate=False)
+# to paraquet
+result.write.mode("overwrite").parquet(parquet_output_path)
+# to csv
+result.coalesce(1).write.mode("overwrite").option("header", True).csv(csv_output_path)
+print("WRITE FINISHED")
 
 spark.stop()
