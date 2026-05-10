@@ -10,3 +10,7 @@ CREATE TABLE IF NOT EXISTS taxi.trips_by_hour
 )
 ENGINE = MergeTree
 ORDER BY (trip_date, pickup_hour);
+
+
+CREATE USER IF NOT EXISTS superset IDENTIFIED WITH no_password;
+GRANT SELECT ON taxi.* TO superset;

@@ -28,6 +28,47 @@ services:
     volumes:
       - postgres_db:/var/lib/postgresql/data
 
+  superset-db:
+    image: postgres:15
+    container_name: superset-db
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: superset
+    volumes:
+      - superset_db:/var/lib/postgresql/data
+
+  superset-redis:
+    image: redis:7
+    container_name: superset-redis
+
+  superset:
+    image: apache/superset:latest
+    container_name: superset
+    depends_on:
+      - superset-db
+      - superset-redis
+      - clickhouse
+    ports:
+      - "8088:8088"
+    environment:
+      SUPERSET_SECRET_KEY: your_superset_secret_key_change_me
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://superset:superset@superset-db:5432/superset
+    volumes:
+      - ./superset:/app/pythonpath
+    command: >
+      /bin/sh -c '
+      pip install clickhouse-connect &&
+      superset db upgrade &&
+      superset fab create-admin \
+        --username admin \
+        --firstname Admin \
+        --lastname User \
+        --email admin@example.com \
+        --password admin || true &&
+      superset init &&
+      superset run -h 0.0.0.0 -p 8088
+      '
   spark-master:
     image: apache/spark:3.5.1-python3
     container_name: spark-master
@@ -137,3 +178,4 @@ volumes:
   airflow_logs:
   airflow_home:
   postgres_db:
+  superset_db:
